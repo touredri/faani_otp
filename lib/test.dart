@@ -44,27 +44,10 @@ void callbackDispatcher() {
 Future<void> start() async {
   if (await _isPermissionGranted()) {
     FirebaseFirestore.instance.collection('OTP').snapshots().listen((snapshot) {
-      print(
-          "Il y'a eu ${snapshot.docChanges.length} changement-------------Start-1-----------");
       for (var change in snapshot.docChanges) {
-        print('$change------------start-2----------------------');
         if (change.type == DocumentChangeType.added) {
-          print("Document added to collection----------------start-3--------------");
           var numero = change.doc['numero'] as String;
           var code = change.doc['code'] as String;
-          print(
-              "Number is $numero with code $code------------start-4------------------");
-
-          var taskId = change.doc.id;
-          // Register the task with the input data
-          Workmanager().registerOneOffTask(
-            taskId,
-            "simpleTask",
-            inputData: <String, dynamic>{
-              'numero': numero,
-              'code': code,
-            },
-          );
         }
       }
     });
@@ -85,7 +68,7 @@ Future<void> _sendMessage(String phoneNumber, String message) async {
       phoneNumber: phoneNumber, message: message, simSlot: 1);
   if (result == SmsStatus.sent) {
     print("Sent");
-    await _deleteDocument(phoneNumber);
+    // await _deleteDocument(phoneNumber);
   } else {
     print("Failed");
     // Handle failure (e.g., show a notification)
@@ -115,13 +98,13 @@ Future<bool> _isPermissionGranted() async {
   return await Permission.sms.status.isGranted;
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
-  await start();
-  runApp(MyApp());
-}
+// void main() async {
+//   WidgetsFlutterBinding.ensureInitialized();
+  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+//   await start();
+//   runApp(MyApp());
+// }
 
 class MyApp extends StatefulWidget {
   @override

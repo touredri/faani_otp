@@ -1,22 +1,27 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-
+import 'package:background_sms/background_sms.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:untitled/firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeService();
   runApp(const MyApp());
 }
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   /// OPTIONAL, using custom notification channel id
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -78,6 +83,12 @@ Future<void> initializeService() async {
 Future<bool> onIosBackground(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    print("Firebase initialization error: $e");
+  }
 
   SharedPreferences preferences = await SharedPreferences.getInstance();
   await preferences.reload();
@@ -92,6 +103,7 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   // Only available for flutter 3.0.0 and later
   DartPluginRegistrant.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // For flutter prior to version 3.0.0
   // We have to register the plugin manually
@@ -146,7 +158,7 @@ void onStart(ServiceInstance service) async {
     }
 
     /// you can see this log in logcat
-    print('FLUTTER BACKGROUND SERVICE: ${DateTime.now()}');
+    // print('FLUTTER BACKGROUND SERVICE: ${DateTime.now()}');
 
     // test using external plugin
     final deviceInfo = DeviceInfoPlugin();
@@ -169,6 +181,52 @@ void onStart(ServiceInstance service) async {
       },
     );
   });
+
+  service.on('sendSMS').listen(
+    (event) async {
+      try {
+        String numero = event!['numero'];
+        String code = event['code'];
+        print('Sending SMS to $numero with code $code');
+        // Use the background_sms package to send the SMS.
+        BackgroundSms.sendMessage(
+            phoneNumber: numero, message: code, simSlot: 1);
+      } catch (e) {
+        print('sendSMS error: $e');
+      }
+    },
+    onError: (error) {
+      print('sendSMS error: $error');
+    },
+  );
+
+  // listen for changes in OTP collection
+  listenForOTPChanges(service);
+}
+
+void listenForOTPChanges(ServiceInstance service) async {
+  try {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+    FirebaseFirestore.instance.collection('OTP').snapshots().listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          print('OTP change: $change');
+          var numero = change.doc['numero'] as String;
+          var code = change.doc['code'] as String;
+          service.invoke(
+            'sendSMS',
+            {
+              'numero': numero,
+              'code': code,
+            },
+          );
+        }
+      }
+    });
+  } catch (e) {
+    print('Firestore listen error: $e');
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -252,15 +310,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
-
-//   Widget build(BuildContext context) {
-//     return ListView.builder(
-//       itemCount: logs.length,
-//       itemBuilder: (context, index) {
-//         final log = logs.elementAt(index);
-//         return Text(log);
-//       },
-//     );
-//   }
-// }
